@@ -1,0 +1,755 @@
+tu va m'aider à la creation de mon app android/IOS et web, qui s'appel IDCONGO. j'ai déja avancé avec quelque trucs, alors je te donne le fichier dashboardScreen.js, tu va l'examiner soigneusement puis faire correctement ce que je veux. alors je veux ceci concernant le scannage je veux que lorsqu'on scanne, le nom complet, sexe, telephone, telephone_2 et adresse et les infos de tout ses proches du proprietaire du compte qui doivent apparaitre. voici le code du dashboardScreen.js: import React, { useEffect, useState } from 'react';
+import { 
+  StyleSheet, 
+  Text, 
+  View, 
+  ActivityIndicator, 
+  Alert, 
+  TouchableOpacity, 
+  ScrollView, 
+  TextInput, 
+  Modal, 
+  Dimensions, 
+  SafeAreaView, 
+  StatusBar,
+  Platform,
+  Image,
+  Share
+} from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import * as Print from 'expo-print';
+import { CameraView, useCameraPermissions } from 'expo-camera';
+
+const { width } = Dimensions.get('window');
+
+export default function DashboardScreen({ username, onDeconnexion }) {
+  const [chargement, setChargement] = useState(true);
+  const [infosData, setInfosData] = useState(null);
+  
+  const [menuActif, setMenuActif] = useState('PROFIL');
+  const [menuOuvert, setMenuOuvert] = useState(false);
+
+  // 👨‍👩‍👧 État pour la liste des proches
+  const [prochesList, setProchesList] = useState([]);
+
+  // Modale Ajout / Modification Proche
+  const [modaleProcheVisible, setModaleProcheVisible] = useState(false);
+  const [procheEnEdition, setProcheEnEdition] = useState(null); // null = Ajout, object = Modif
+  const [formProche, setFormProche] = useState({
+    id: null,
+    nom_complet: '',
+    contact: '',
+    contact_2: '',
+    adresse: ''
+  });
+
+  // Modale du Scanner
+  const [scannerVisible, setScannerVisible] = useState(false);
+  const [scanned, setScanned] = useState(false);
+  const [permission, requestPermission] = useCameraPermissions();
+
+  // Champs de suppression du compte
+  const [delUsername, setDelUsername] = useState('');
+  const [delEmail, setDelEmail] = useState('');
+  const [delMdp, setDelMdp] = useState('');
+
+  const API_URL = "https://great-ghosts-spend.loca.lt";
+
+  useEffect(() => {
+    if (username) {
+      chargerProfil();
+    } else {
+      setChargement(false);
+    }
+  }, [username]);
+
+  // 🔄 FONCTION CHARGER PROFIL
+  const chargerProfil = async () => {
+    try {
+      setChargement(true);
+      const url = `${API_URL}/idcongo/get_user_profile.php?username=${encodeURIComponent(username)}`;
+
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: { 
+          'bypass-tunnel-reminder': 'true',
+          'Content-Type': 'application/json'
+        }
+      });
+
+      const resultat = await response.json();
+
+      if (resultat && resultat.status === 'success') {
+        setInfosData(resultat);
+
+        // Récupération du tableau de proches retourné par get_user_profile.php
+        const pData = resultat.proches || resultat.proche || [];
+        if (Array.isArray(pData)) {
+          setProchesList(pData);
+        } else if (pData && typeof pData === 'object') {
+          setProchesList([pData]);
+        } else {
+          setProchesList([]);
+        }
+      } else {
+        Alert.alert("Erreur", resultat.message || "Impossible de charger le profil");
+      }
+    } catch (error) {
+      console.error("Erreur Fetch Profil :", error);
+      Alert.alert("Erreur Réseau", "Impossible de contacter le serveur IDCONGO");
+    } finally {
+      setChargement(false);
+    }
+  };
+
+  const changerOnglet = (onglet) => {
+    setMenuActif(onglet);
+    setMenuOuvert(false);
+  };
+
+  // 🔍 Mapping dynamique des données du propriétaire
+  const p = infosData?.user || infosData?.proprietaire || infosData?.data || infosData || {};
+  const idProprietaire = p.id || null; // Récupère l'ID unique MySQL du propriétaire
+
+  // Récupération de la photo
+  const rawPhoto = p.photo_url || p.photo || p.avatar || p.image || p.photo_profil || null;
+  let photoUrl = null;
+
+  if (rawPhoto && typeof rawPhoto === 'string') {
+    let cleanPhoto = rawPhoto.replace(/[\r\n\s]+/g, '');
+
+    if (cleanPhoto.startsWith('data:image')) {
+      cleanPhoto = cleanPhoto.replace('base64;', 'base64,');
+      photoUrl = cleanPhoto;
+    } else if (cleanPhoto.startsWith('http')) {
+      photoUrl = cleanPhoto;
+    } else if (cleanPhoto.length > 50) {
+      photoUrl = `data:image/jpeg;base64,${cleanPhoto}`;
+    } else {
+      photoUrl = `${API_URL}/idcongo/${cleanPhoto.replace(/^\//, '')}`;
+    }
+  }
+
+  const nomUser = p.nom || p.nom_proprio || '';
+  const prenomUser = p.prenom || p.prenom_proprio || '';
+  const postnomUser = p.postnom || p.postnom_proprio || '';
+
+  const assemblageNom = `${prenomUser} ${nomUser} ${postnomUser}`.trim();
+  const nomComplet = assemblageNom.length > 0 ? assemblageNom : (username || "Propriétaire IDCONGO");
+
+  const sexeUser = p.sexe || p.gender || 'N/A';
+  const telUser = p.telephone || p.phone || p.tel || 'N/A';
+  const emailUser = p.email || p.mail || 'N/A';
+  const villeUser = p.ville || p.ville_province || p.province || 'N/A';
+  const adresseUser = p.adresse || p.adresse_physique || 'N/A';
+  const idUnique = username || p.username || p.identifiant || 'N/A';
+
+  const dateNaissance = p.date_naissance || p.dob || 'N/A';
+  const lieuNaissance = p.lieu_naissance || p.pob || 'N/A';
+  const nomPere = p.nom_pere || p.pere || 'N/A';
+  const nomMere = p.nom_mere || p.mere || 'N/A';
+  
+  const lieuDelivrance = villeUser;
+  const dateDelivrance = p.date_delivrance || 'N/A';
+
+  // 🖨️ IMPRIMER
+  const imprimerCarte = async () => {
+    const htmlContent = `
+      <html>
+        <head>
+          <style>
+            body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+            .carte { width: 380px; border: 2px solid #000; padding: 10px; border-radius: 8px; background: #fff; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+            .header { text-align: center; font-size: 10px; font-weight: bold; color: #000; }
+            .sub-header { text-align: center; font-size: 6.5px; color: #333; margin-bottom: 8px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+            .content { display: flex; justify-content: space-between; align-items: flex-start; }
+            .photo-box { width: 60px; height: 75px; border: 1px solid #000; object-fit: cover; }
+            .info { font-size: 9px; line-height: 1.4; flex: 1; padding-left: 8px; }
+            .info b { color: #0055A5; }
+            .side-info { font-size: 7px; color: #333; margin-top: 3px; }
+          </style>
+        </head>
+        <body>
+          <div class="carte">
+            <div class="header">RÉPUBLIQUE DÉMOCRATIQUE DU CONGO</div>
+            <div class="sub-header">MINISTÈRE DE L'INTÉRIEUR, SÉCURITÉ & AFFAIRES COUTUMIÈRES</div>
+            <div class="content">
+              <div>
+                <img src="${photoUrl || 'https://via.placeholder.com/60x75'}" class="photo-box" />
+                <div class="side-info"><b>Mat:</b> ${p.matricule || 'N/A'}</div>
+                <div class="side-info"><b>Père:</b> ${nomPere}</div>
+                <div class="side-info"><b>Mère:</b> ${nomMere}</div>
+              </div>
+              <div class="info">
+                <div><b>N° National:</b> ${p.nn || p.num_national || 'N/A'}</div>
+                <div><b>Nom:</b> ${nomUser.toUpperCase()}</div>
+                <div><b>Prénom:</b> ${postnomUser} ${prenomUser}</div>
+                <div><b>Adresse:</b> ${adresseUser}</div>
+                <div><b>Sexe:</b> ${sexeUser}</div>
+                <div><b>Né(e) le:</b> ${dateNaissance} à ${lieuNaissance}</div>
+                <div><b>Ville:</b> ${villeUser}</div>
+              </div>
+              <div style="text-align: center;">
+                <div class="side-info" style="margin-top: 10px;"><b>Délivré à:</b> ${lieuDelivrance}</div>
+                <div class="side-info"><b>Le:</b> ${dateDelivrance}</div>
+              </div>
+            </div>
+          </div>
+        </body>
+      </html>
+    `;
+
+    try {
+      await Print.printAsync({ html: htmlContent });
+    } catch (error) {
+      Alert.alert("Erreur", "Impossible de lancer l'impression : " + error.message);
+    }
+  };
+
+  // 🔗 PARTAGER
+  const partagerCarte = async () => {
+    try {
+      const message = `🪪 CARTE D'IDENTITÉ IDCONGO\n\n` +
+        `Nom complet : ${nomComplet}\n` +
+        `N° National : ${p.nn || p.num_national || 'N/A'}\n` +
+        `Matricule : ${p.matricule || 'N/A'}\n` +
+        `Adresse : ${adresseUser}\n` +
+        `Sexe : ${sexeUser}\n` +
+        `Né(e) le : ${dateNaissance} à ${lieuNaissance}\n` +
+        `Ville : ${villeUser}\n` +
+        `Père : ${nomPere}\n` +
+        `Mère : ${nomMere}\n` +
+        `Délivré à : ${lieuDelivrance} le ${dateDelivrance}`;
+
+      await Share.share({ message });
+    } catch (error) {
+      Alert.alert("Erreur", "Impossible de partager : " + error.message);
+    }
+  };
+
+  // 📷 SCANNER QR
+  const ouvrirScanner = async () => {
+    if (!permission?.granted) {
+      const status = await requestPermission();
+      if (!status.granted) {
+        Alert.alert("Permission refusée", "L'accès à la caméra est obligatoire.");
+        return;
+      }
+    }
+    setScanned(false);
+    setScannerVisible(true);
+  };
+
+  const handleBarCodeScanned = ({ data }) => {
+    setScanned(true);
+    try {
+      const info = JSON.parse(data);
+      Alert.alert(
+        "✅ Carte IDCONGO Validée",
+        `Nom : ${info.nom || 'N/A'}\nID : ${info.id || 'N/A'}\nN° National : ${info.nn || 'N/A'}\nMatricule : ${info.mat || 'N/A'}`,
+        [{ text: "Fermer", onPress: () => setScannerVisible(false) }]
+      );
+    } catch (e) {
+      Alert.alert("QR Code Lu", `Données : ${data}`, [
+        { text: "Fermer", onPress: () => setScannerVisible(false) }
+      ]);
+    }
+  };
+
+  // ----------------------------------------------------
+  // 👨‍👩‍👧 GESTION DE LA FAMILLE ET DES PROCHES (CONNEXION BDD)
+  // ----------------------------------------------------
+
+  const ouvrirModalAjoutProche = () => {
+    setProcheEnEdition(null);
+    setFormProche({ id: null, nom_complet: '', contact: '', contact_2: '', adresse: '' });
+    setModaleProcheVisible(true);
+  };
+
+  const ouvrirModalModifProche = (proche) => {
+    setProcheEnEdition(proche);
+    setFormProche({
+      id: proche.id || null,
+      nom_complet: proche.nom_complet || `${proche.nom || ''} ${proche.prenom || ''}`.trim(),
+      contact: proche.contact || proche.telephone || '',
+      contact_2: proche.contact_2 || proche.telephone_2 || '',
+      adresse: proche.adresse || ''
+    });
+    setModaleProcheVisible(true);
+  };
+
+  // ➕/✏️ ENREGISTRER OU MODIFIER UN PROCHE EN BASE DE DONNÉES
+  const enregistrerProche = async () => {
+    if (!formProche.nom_complet.trim() || !formProche.contact.trim()) {
+      Alert.alert("Champs requis", "Le nom complet et au moins un contact sont obligatoires.");
+      return;
+    }
+
+    if (!idProprietaire) {
+      Alert.alert("Erreur", "Identifiant du propriétaire introuvable. Veuillez réessayer.");
+      return;
+    }
+
+    const endpoint = procheEnEdition ? 'modifier_proche.php' : 'ajouter_proche.php';
+    const payload = {
+      id: formProche.id,
+      id_proprietaire: idProprietaire,
+      nom_complet: formProche.nom_complet.trim(),
+      contact: formProche.contact.trim(),
+      contact_2: formProche.contact_2 ? formProche.contact_2.trim() : '',
+      adresse: formProche.adresse ? formProche.adresse.trim() : ''
+    };
+
+    try {
+      const response = await fetch(`${API_URL}/idcongo/${endpoint}`, {
+        method: 'POST',
+        headers: { 
+          'bypass-tunnel-reminder': 'true',
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const res = await response.json();
+
+      if (res.status === 'success') {
+        Alert.alert("Succès", res.message || "Enregistrement réussi !");
+        setModaleProcheVisible(false);
+        chargerProfil(); // Actualise les données depuis MySQL
+      } else {
+        Alert.alert("Erreur BDD", res.message || "Une erreur est survenue.");
+      }
+    } catch (e) {
+      console.error("Erreur enregistrement proche BDD :", e);
+      Alert.alert("Erreur Réseau", "Impossible de contacter le serveur.");
+    }
+  };
+
+  const confirmerSuppressionProche = (proche) => {
+    Alert.alert(
+      "Suppression",
+      `Voulez-vous vraiment supprimer ${proche.nom_complet || 'ce proche'} ?`,
+      [
+        { text: "Annuler", style: "cancel" },
+        { text: "Supprimer", style: "destructive", onPress: () => supprimerProche(proche) }
+      ]
+    );
+  };
+
+  // 🗑️ SUPPRIMER UN PROCHE DE LA BASE DE DONNÉES
+  const supprimerProche = async (proche) => {
+    if (!proche.id || !idProprietaire) {
+      Alert.alert("Erreur", "Identifiant du proche invalide.");
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/idcongo/supprimer_proche.php`, {
+        method: 'POST',
+        headers: { 
+          'bypass-tunnel-reminder': 'true',
+          'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify({
+          id: proche.id,
+          id_proprietaire: idProprietaire
+        })
+      });
+
+      const res = await response.json();
+
+      if (res.status === 'success') {
+        Alert.alert("Supprimé", "Le proche a été supprimé de la base de données.");
+        chargerProfil(); // Actualise après suppression
+      } else {
+        Alert.alert("Erreur BDD", res.message || "Échec de la suppression.");
+      }
+    } catch (e) {
+      console.error("Erreur suppression proche :", e);
+      Alert.alert("Erreur Réseau", "Impossible de contacter le serveur.");
+    }
+  };
+
+  if (chargement) {
+    return (
+      <View style={styles.containerCentre}>
+        <StatusBar barStyle="light-content" backgroundColor="#0055A5" />
+        <ActivityIndicator size="large" color="#FFD100" />
+        <Text style={styles.texteChargement}>Chargement de votre profil...</Text>
+      </View>
+    );
+  }
+
+  const renduEspaceMenu = () => {
+    switch (menuActif) {
+      
+      case 'PROFIL':
+        return (
+          <ScrollView contentContainerStyle={styles.contenuMenuScroll} showsVerticalScrollIndicator={false}>
+            {photoUrl ? (
+              <Image source={{ uri: photoUrl }} style={styles.avatarImage} resizeMode="cover" />
+            ) : (
+              <View style={styles.avatarCercle}>
+                <Text style={styles.avatarTexte}>SANS PHOTO</Text>
+              </View>
+            )}
+
+            <Text style={styles.nomUtilisateur}>{nomComplet}</Text>
+            <Text style={styles.badgeUsername}>@{idUnique}</Text>
+            
+            <View style={styles.blocDetails}>
+              <View style={styles.champRow}>
+                <Text style={styles.detailLabel}>🆔 Identifiant :</Text>
+                <Text style={styles.detailValeur}>{idUnique}</Text>
+              </View>
+
+              <View style={styles.champRow}>
+                <Text style={styles.detailLabel}>👤 Nom complet :</Text>
+                <Text style={styles.detailValeur}>{nomComplet}</Text>
+              </View>
+
+              <View style={styles.champRow}>
+                <Text style={styles.detailLabel}>🎂 Date & Lieu de Naissance :</Text>
+                <Text style={styles.detailValeur}>{dateNaissance} à {lieuNaissance}</Text>
+              </View>
+
+              <View style={styles.champRow}>
+                <Text style={styles.detailLabel}>⚧️ Sexe :</Text>
+                <Text style={styles.detailValeur}>{sexeUser}</Text>
+              </View>
+
+              <View style={styles.champRow}>
+                <Text style={styles.detailLabel}>👨‍👦 Père & Mère :</Text>
+                <Text style={styles.detailValeur}>Père: {nomPere} | Mère: {nomMere}</Text>
+              </View>
+
+              <View style={styles.champRow}>
+                <Text style={styles.detailLabel}>📞 Téléphone :</Text>
+                <Text style={styles.detailValeur}>{telUser}</Text>
+              </View>
+
+              <View style={styles.champRow}>
+                <Text style={styles.detailLabel}>✉️ Email :</Text>
+                <Text style={styles.detailValeur}>{emailUser}</Text>
+              </View>
+
+              <View style={styles.champRow}>
+                <Text style={styles.detailLabel}>🏛️ Ville / Province :</Text>
+                <Text style={styles.detailValeur}>{villeUser}</Text>
+              </View>
+
+              <View style={styles.champRowDernier}>
+                <Text style={styles.detailLabel}>🏠 Adresse :</Text>
+                <Text style={styles.detailValeur}>{adresseUser}</Text>
+              </View>
+            </View>
+          </ScrollView>
+        );
+
+      case 'CARTE':
+        const qrData = JSON.stringify({
+          id: idUnique,
+          nom: nomComplet,
+          nn: p.nn || p.num_national || '',
+          mat: p.matricule || ''
+        });
+
+        return (
+          <ScrollView contentContainerStyle={styles.contenuMenuScroll} showsVerticalScrollIndicator={false}>
+            <View style={styles.carteIdentite}>
+              <Text style={styles.carteRepublique}>RÉPUBLIQUE DÉMOCRATIQUE DU CONGO</Text>
+              <Text style={styles.carteMinistere}>MINISTÈRE DE L'INTÉRIEUR, SÉCURITÉ & AFFAIRES COUTUMIÈRES</Text>
+              
+              <View style={styles.carteRow}>
+                <View style={styles.carteGauche}>
+                  <View style={styles.cartePhotoContainer}>
+                    {photoUrl ? (
+                      <Image source={{ uri: photoUrl }} style={styles.cartePhoto} resizeMode="cover" />
+                    ) : (
+                      <Text style={styles.cartePhotoTexte}>PHOTO</Text>
+                    )}
+                  </View>
+                  <Text style={styles.cartePetiteInfo}>N° Matri : <Text style={styles.cartePetiteInfoValeur}>{p.matricule || 'N/A'}</Text></Text>
+                  <Text style={styles.cartePetiteInfo}>Père : <Text style={styles.cartePetiteInfoValeur}>{nomPere}</Text></Text>
+                  <Text style={styles.cartePetiteInfo}>Mère : <Text style={styles.cartePetiteInfoValeur}>{nomMere}</Text></Text>
+                </View>
+
+                <View style={styles.carteMilieu}>
+                  <Text style={styles.carteNationale}>N° National : {p.nn || p.num_national || 'N/A'}</Text>
+                  <Text style={styles.carteLabel}>Nom : <Text style={styles.carteValeur}>{nomUser ? nomUser.toUpperCase() : 'N/A'}</Text></Text>
+                  <Text style={styles.carteLabel}>Prénom : <Text style={styles.carteValeur}>{`${postnomUser} ${prenomUser}`.trim() || 'N/A'}</Text></Text>
+                  <Text style={styles.carteLabel}>Adresse : <Text style={styles.carteValeur}>{adresseUser}</Text></Text>
+                  <Text style={styles.carteLabel}>Sexe : <Text style={styles.carteValeur}>{sexeUser}</Text></Text>
+                  <Text style={styles.carteLabel}>Né(e) le : <Text style={styles.carteValeur}>{dateNaissance}</Text></Text>
+                  <Text style={styles.carteLabel}>À : <Text style={styles.carteValeur}>{lieuNaissance}</Text></Text>
+                  <Text style={styles.carteLabel}>Ville : <Text style={styles.carteValeur}>{villeUser}</Text></Text>
+                </View>
+
+                <View style={styles.carteDroite}>
+                  <QRCode value={qrData} size={55} />
+                  <Text style={styles.carteDelivranceLabel}>Délivré à :</Text>
+                  <Text style={styles.carteDelivranceValeur}>{lieuDelivrance}</Text>
+                  <Text style={styles.carteDelivranceLabel}>Le :</Text>
+                  <Text style={styles.carteDelivranceValeur}>{dateDelivrance}</Text>
+                </View>
+              </View>
+            </View>
+
+            <TouchableOpacity style={styles.btnActionLarge} onPress={imprimerCarte}>
+              <Text style={styles.btnActionTexte}>🖨️ Imprimer la carte</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.btnActionLarge} onPress={partagerCarte}>
+              <Text style={styles.btnActionTexte}>🔗 Partager la carte</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={[styles.btnActionLarge, { backgroundColor: '#27AE60' }]} onPress={ouvrirScanner}>
+              <Text style={styles.btnActionTexte}>📷 Scanner des cartes</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        );
+
+      case 'FAMILLE':
+        return (
+          <ScrollView contentContainerStyle={styles.contenuMenuScroll} showsVerticalScrollIndicator={false}>
+            <Text style={styles.titreEspace}>Famille & Proches</Text>
+            
+            {prochesList.length > 0 ? (
+              prochesList.map((procheItem, index) => {
+                const nomProche = procheItem.nom_complet || `${procheItem.nom || ''} ${procheItem.prenom || ''}`.trim() || 'Sans Nom';
+                const c1 = procheItem.contact || procheItem.telephone || 'N/A';
+                const c2 = procheItem.contact_2 || procheItem.telephone_2 || null;
+                const adr = procheItem.adresse || 'N/A';
+
+                return (
+                  <View key={index} style={styles.procheCard}>
+                    <Text style={styles.procheNom}>👤 {nomProche}</Text>
+                    <Text style={styles.procheInfo}>📞 Contact 1 : {c1}</Text>
+                    {c2 ? <Text style={styles.procheInfo}>📱 Contact 2 : {c2}</Text> : null}
+                    <Text style={styles.procheInfo}>🏠 Adresse : {adr}</Text>
+
+                    <View style={styles.procheActionsRow}>
+                      <TouchableOpacity 
+                        style={styles.btnMiniAction} 
+                        onPress={() => ouvrirModalModifProche(procheItem)}
+                      >
+                        <Text style={styles.txtMiniAction}>✏️ Modifier</Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity 
+                        style={[styles.btnMiniAction, { backgroundColor: '#CC0000' }]} 
+                        onPress={() => confirmerSuppressionProche(procheItem)}
+                      >
+                        <Text style={[styles.txtMiniAction, { color: '#FFF' }]}>🗑️ Supprimer</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })
+            ) : (
+              <Text style={styles.infoVide}>Aucun proche enregistré pour le moment.</Text>
+            )}
+
+            <TouchableOpacity style={styles.btnAjouterProche} onPress={ouvrirModalAjoutProche}>
+              <Text style={styles.btnAjouterProcheTexte}>+ Ajouter un proche</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        );
+
+      case 'PARAMETRES':
+        return (
+          <ScrollView contentContainerStyle={styles.contenuMenuScroll} showsVerticalScrollIndicator={false}>
+            <Text style={styles.titreEspace}>Paramètres</Text>
+            
+            <TouchableOpacity style={styles.itemOption} onPress={() => Alert.alert("Compte", "Ouverture des modifications...")}>
+              <Text style={styles.itemOptionTexte}>⚙️ Modifier le compte</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.itemOption}>
+              <Text style={styles.itemOptionTexte}>🌐 Langue (Français)</Text>
+            </TouchableOpacity>
+
+            <View style={styles.boxSuppression}>
+              <Text style={styles.titreSuppression}>🚨 Supprimer le compte</Text>
+              <TextInput style={styles.inputSupp} placeholder="Nom d'utilisateur" value={delUsername} onChangeText={setDelUsername} autoCapitalize="none" />
+              <TextInput style={styles.inputSupp} placeholder="Email" value={delEmail} onChangeText={setDelEmail} keyboardType="email-address" autoCapitalize="none" />
+              <TextInput style={styles.inputSupp} placeholder="Mot de passe" secureTextEntry value={delMdp} onChangeText={setDelMdp} autoCapitalize="none" />
+              <TouchableOpacity style={styles.btnDeleteFinal} onPress={() => Alert.alert("Suppression", "Détruire ce compte ?")}>
+                <Text style={styles.btnDeleteFinalText}>CONFIRMER SUPPRESSION</Text>
+              </TouchableOpacity>
+            </View>
+          </ScrollView>
+        );
+
+      default:
+        return null;
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0055A5" />
+
+      {/* EN-TÊTE */}
+      <View style={styles.headerEspace}>
+        <TouchableOpacity style={styles.btnHamburger} onPress={() => setMenuOuvert(true)} activeOpacity={0.7}>
+          <Text style={styles.icôneHamburger}>☰</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerAppTitle}>IDCONGO</Text>
+        <View style={{ width: 35 }} />
+      </View>
+
+      {/* CONTENU PRINCIPAL */}
+      <View style={styles.espaceContenu}>
+        {renduEspaceMenu()}
+      </View>
+
+      {/* MENU LATÉRAL */}
+      <Modal visible={menuOuvert} transparent={true} animationType="fade" onRequestClose={() => setMenuOuvert(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.barreMenuGauche}>
+            <View style={styles.headerMenuGauche}>
+              <Text style={styles.titreMenu}>MENU</Text>
+              <TouchableOpacity onPress={() => setMenuOuvert(false)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Text style={styles.btnFermer}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.menuListeItems}>
+              <TouchableOpacity style={[styles.boutonMenu, menuActif === 'PROFIL' && styles.boutonMenuActive]} onPress={() => changerOnglet('PROFIL')}>
+                <Text style={[styles.texteBoutonMenu, menuActif === 'PROFIL' && styles.texteBoutonMenuActive]}>👤  PROFIL</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[styles.boutonMenu, menuActif === 'CARTE' && styles.boutonMenuActive]} onPress={() => changerOnglet('CARTE')}>
+                <Text style={[styles.texteBoutonMenu, menuActif === 'CARTE' && styles.texteBoutonMenuActive]}>🪪  CARTE D'IDENTITÉ</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[styles.boutonMenu, menuActif === 'FAMILLE' && styles.boutonMenuActive]} onPress={() => changerOnglet('FAMILLE')}>
+                <Text style={[styles.texteBoutonMenu, menuActif === 'FAMILLE' && styles.texteBoutonMenuActive]}>👨‍👩‍👧  FAMILLE & PROCHES</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[styles.boutonMenu, menuActif === 'PARAMETRES' && styles.boutonMenuActive]} onPress={() => changerOnglet('PARAMETRES')}>
+                <Text style={[styles.texteBoutonMenu, menuActif === 'PARAMETRES' && styles.texteBoutonMenuActive]}>⚙️  PARAMÈTRES</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={styles.footerMenu}>
+              <TouchableOpacity style={styles.boutonDeconnexion} onPress={() => { setMenuOuvert(false); onDeconnexion(); }}>
+                <Text style={styles.texteBoutonMenuDeconnexion}>🚪  DÉCONNEXION</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+          
+          <TouchableOpacity style={styles.modalZoneVide} activeOpacity={1} onPress={() => setMenuOuvert(false)} />
+        </View>
+      </Modal>
+
+      {/* 👨‍👩‍👧 MODALE AJOUT/EDITION PROCHE */}
+      <Modal visible={modaleProcheVisible} animationType="slide" transparent={true} onRequestClose={() => setModaleProcheVisible(false)}>
+        <View style={styles.modalProcheOverlay}>
+          <View style={styles.modalProcheContainer}>
+            <Text style={styles.modalProcheTitre}>{procheEnEdition ? "Modifier le proche" : "Ajouter un proche"}</Text>
+
+            <TextInput 
+              style={styles.inputProche} 
+              placeholder="Nom complet *" 
+              value={formProche.nom_complet} 
+              onChangeText={(txt) => setFormProche({...formProche, nom_complet: txt})} 
+            />
+            <TextInput 
+              style={styles.inputProche} 
+              placeholder="Contact principal *" 
+              keyboardType="phone-pad" 
+              value={formProche.contact} 
+              onChangeText={(txt) => setFormProche({...formProche, contact: txt})} 
+            />
+            <TextInput 
+              style={styles.inputProche} 
+              placeholder="Contact secondaire (optionnel)" 
+              keyboardType="phone-pad" 
+              value={formProche.contact_2} 
+              onChangeText={(txt) => setFormProche({...formProche, contact_2: txt})} 
+            />
+            <TextInput 
+              style={styles.inputProche} 
+              placeholder="Adresse physique" 
+              value={formProche.adresse} 
+              onChangeText={(txt) => setFormProche({...formProche, adresse: txt})} 
+            />
+
+            <View style={styles.modalProcheActions}>
+              <TouchableOpacity style={styles.btnModalAnnuler} onPress={() => setModaleProcheVisible(false)}>
+                <Text style={styles.txtModalAnnuler}>Annuler</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.btnModalValider} onPress={enregistrerProche}>
+                <Text style={styles.txtModalValider}>Enregistrer</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* MODALE SCANNER */}
+      <Modal visible={scannerVisible} animationType="slide" onRequestClose={() => setScannerVisible(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#000' }}>
+          <View style={styles.scannerHeader}>
+            <Text style={{ color: '#FFF', fontSize: 16, fontWeight: 'bold' }}>📷 Scanner IDCONGO</Text>
+            <TouchableOpacity onPress={() => setScannerVisible(false)}>
+              <Text style={{ color: '#FFD100', fontSize: 16, fontWeight: 'bold' }}>Fermer</Text>
+            </TouchableOpacity>
+          </View>
+
+          <CameraView
+            style={{ flex: 1 }}
+            facing="back"
+            onBarcodeScanned={scanned ? undefined : handleBarCodeScanned}
+            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
+          >
+            <View style={styles.scannerOverlay}>
+              <View style={styles.cadreVisee} />
+              <Text style={styles.texteAideScanner}>Ciblez le QR Code de la carte</Text>
+            </View>
+          </CameraView>
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0055A5' },
+  containerCentre: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#0055A5' },
+  texteChargement: { color: '#FFF', marginTop: 12, fontSize: 14, fontWeight: '500' },
+  
+  headerEspace: { 
+    height: Platform.OS === 'android' ? 65 : 55, 
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 10 : 0,
+    backgroundColor: '#0055A5', 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justify: 'space-between', 
+    paddingHorizontal: 15, 
+    borderBottomWidth: 3, 
+    borderColor: '#FFD100' 
+  },
+  btnHamburger: { padding: 5 },
+  icôneHamburger: { color: '#FFD100', fontSize: 24, fontWeight: 'bold' },
+  headerAppTitle: { color: '#FFD100', fontSize: 18, fontWeight: 'bold', letterSpacing: 1.5 },
+
+  modalOverlay: { flex: 1, flexDirection: 'row', backgroundColor: 'rgba(0,0,0,0.6)' },
+  modalZoneVide: { flex: 1 },
+  barreMenuGauche: { 
+    width: width * 0.78, 
+    backgroundColor: '#002B55', 
+    paddingHorizontal: 20, 
+    paddingTop: Platform.OS === 'android' ? (StatusBar.currentHeight || 20) + 20 : 45, 
+    paddingBottom: 25,
+    justifyContent: 'space-between',
+    elevation: 10,
+    shadowColor: '#000',
+    shadowOffset: { width: 3, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5
+  },
+  headerMenuGauche: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 25 },
+ 

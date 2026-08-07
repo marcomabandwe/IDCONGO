@@ -1,0 +1,275 @@
+import React from 'react';
+import { 
+  StyleSheet, 
+  Text, 
+  View, 
+  TouchableOpacity, 
+  ScrollView, 
+  SafeAreaView, 
+  StatusBar,
+  Image,
+  Alert,
+  Share,
+  Platform
+} from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+
+const API_URL = "https://wide-banks-warn.loca.lt";
+
+export default function ScanResultScreen({ route, navigation }) {
+  // Récupération des données passées en paramètres de navigation
+  const scannedData = route.params?.data || {};
+
+  // 🔍 Mapping dynamique des données du propriétaire
+  const p = scannedData?.user || scannedData?.proprietaire || scannedData?.data || scannedData || {};
+
+  // Récupération et formatage de la photo
+  const rawPhoto = p.photo_url || p.photo || p.avatar || p.image || p.photo_profil || null;
+  let photoUrl = null;
+
+  if (rawPhoto && typeof rawPhoto === 'string') {
+    let cleanPhoto = rawPhoto.replace(/[\r\n\s]+/g, '');
+
+    if (cleanPhoto.startsWith('data:image')) {
+      cleanPhoto = cleanPhoto.replace('base64;', 'base64,');
+      photoUrl = cleanPhoto;
+    } else if (cleanPhoto.startsWith('http')) {
+      photoUrl = cleanPhoto;
+    } else if (cleanPhoto.length > 50) {
+      photoUrl = `data:image/jpeg;base64,${cleanPhoto}`;
+    } else {
+      photoUrl = `${API_URL}/idcongo/${cleanPhoto.replace(/^\//, '')}`;
+    }
+  }
+
+  // Informations générales
+  const nomUser = p.nom || p.nom_proprio || '';
+  const prenomUser = p.prenom || p.prenom_proprio || '';
+  const postnomUser = p.postnom || p.postnom_proprio || '';
+
+  const assemblageNom = `${prenomUser} ${nomUser} ${postnomUser}`.trim();
+  const nomComplet = assemblageNom.length > 0 ? assemblageNom : "Propriétaire IDCONGO";
+
+  const sexeUser = p.sexe || p.gender || 'N/A';
+  const telUser = p.telephone || p.phone || p.tel || 'N/A';
+  const emailUser = p.email || p.mail || 'N/A';
+  const villeUser = p.ville || p.ville_province || p.province || 'N/A';
+  const adresseUser = p.adresse || p.adresse_physique || 'N/A';
+  const idUnique = p.username || p.identifiant || 'N/A';
+
+  const dateNaissance = p.date_naissance || p.dob || 'N/A';
+  const lieuNaissance = p.lieu_naissance || p.pob || 'N/A';
+  const nomPere = p.nom_pere || p.pere || 'N/A';
+  const nomMere = p.nom_mere || p.mere || 'N/A';
+
+  // 👨‍👩‍👧 Extraction de la liste des proches
+  const pData = scannedData?.proches || scannedData?.proche || p.proches || [];
+  let prochesList = [];
+  if (Array.isArray(pData)) {
+    prochesList = pData;
+  } else if (pData && typeof pData === 'object') {
+    prochesList = [pData];
+  }
+
+  // Data QR Code pour contrôle d'authenticité
+  const qrData = JSON.stringify({ username: idUnique });
+
+  // 🔗 PARTAGER LES INFORMATIONS (FORMAT TEXTE SEULEMENT)
+  const partagerInfos = async () => {
+    try {
+      const message = `📋 FICHE D'INFORMATION IDCONGO\n\n` +
+        `Nom complet : ${nomComplet}\n` +
+        `Identifiant : @${idUnique}\n` +
+        `N° National : ${p.nn || p.num_national || 'N/A'}\n` +
+        `Matricule : ${p.matricule || 'N/A'}\n` +
+        `Sexe : ${sexeUser}\n` +
+        `Né(e) le : ${dateNaissance} à ${lieuNaissance}\n` +
+        `Téléphone : ${telUser}\n` +
+        `Adresse : ${adresseUser}\n` +
+        `Ville : ${villeUser}\n` +
+        `Père : ${nomPere}\n` +
+        `Mère : ${nomMere}`;
+
+      await Share.share({ message });
+    } catch (error) {
+      Alert.alert("Erreur", "Impossible de partager : " + error.message);
+    }
+  };
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0055A5" />
+
+      {/* EN-TÊTE AVEC BOUTON RETOUR */}
+      <View style={styles.headerEspace}>
+        <TouchableOpacity style={styles.btnRetour} onPress={() => navigation.goBack()}>
+          <Text style={styles.texteBtnRetour}>⬅️ Retour</Text>
+        </TouchableOpacity>
+        <Text style={styles.headerAppTitle}>RÉSULTAT DU SCAN</Text>
+        <View style={{ width: 60 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.contenuScroll} showsVerticalScrollIndicator={false}>
+        
+        {/* 1. AFFICHAGE PHOTO & NOM */}
+        <View style={styles.sectionCentre}>
+          {photoUrl ? (
+            <Image source={{ uri: photoUrl }} style={styles.avatarImage} resizeMode="cover" />
+          ) : (
+            <View style={styles.avatarCercle}>
+              <Text style={styles.avatarTexte}>SANS PHOTO</Text>
+            </View>
+          )}
+
+          <Text style={styles.nomUtilisateur}>{nomComplet}</Text>
+          <Text style={styles.badgeUsername}>@{idUnique}</Text>
+        </View>
+
+        {/* 2. TOUTES LES INFORMATIONS DU PROPRIÉTAIRE */}
+        <Text style={styles.titreSection}>👤 Informations du Propriétaire</Text>
+        <View style={styles.blocDetails}>
+          <View style={styles.champRow}>
+            <Text style={styles.detailLabel}>🆔 Identifiant Unique :</Text>
+            <Text style={styles.detailValeur}>{idUnique}</Text>
+          </View>
+
+          <View style={styles.champRow}>
+            <Text style={styles.detailLabel}>🎖️ N° National / Matricule :</Text>
+            <Text style={styles.detailValeur}>{p.nn || p.num_national || 'N/A'} / {p.matricule || 'N/A'}</Text>
+          </View>
+
+          <View style={styles.champRow}>
+            <Text style={styles.detailLabel}>👤 Nom complet :</Text>
+            <Text style={styles.detailValeur}>{nomComplet}</Text>
+          </View>
+
+          <View style={styles.champRow}>
+            <Text style={styles.detailLabel}>🎂 Date & Lieu de Naissance :</Text>
+            <Text style={styles.detailValeur}>{dateNaissance} à {lieuNaissance}</Text>
+          </View>
+
+          <View style={styles.champRow}>
+            <Text style={styles.detailLabel}>⚧️ Sexe :</Text>
+            <Text style={styles.detailValeur}>{sexeUser}</Text>
+          </View>
+
+          <View style={styles.champRow}>
+            <Text style={styles.detailLabel}>👨‍👦 Filiation (Père & Mère) :</Text>
+            <Text style={styles.detailValeur}>Père: {nomPere} | Mère: {nomMere}</Text>
+          </View>
+
+          <View style={styles.champRow}>
+            <Text style={styles.detailLabel}>📞 Téléphone :</Text>
+            <Text style={styles.detailValeur}>{telUser}</Text>
+          </View>
+
+          <View style={styles.champRow}>
+            <Text style={styles.detailLabel}>✉️ Email :</Text>
+            <Text style={styles.detailValeur}>{emailUser}</Text>
+          </View>
+
+          <View style={styles.champRow}>
+            <Text style={styles.detailLabel}>🏛️ Ville / Province :</Text>
+            <Text style={styles.detailValeur}>{villeUser}</Text>
+          </View>
+
+          <View style={styles.champRowDernier}>
+            <Text style={styles.detailLabel}>🏠 Adresse :</Text>
+            <Text style={styles.detailValeur}>{adresseUser}</Text>
+          </View>
+        </View>
+
+        {/* 3. QR CODE DE VÉRIFICATION */}
+        <Text style={styles.titreSection}>📱 Code de Contrôle</Text>
+        <View style={styles.blocQr}>
+          <QRCode value={qrData} size={110} />
+          <Text style={styles.legendeQr}>QR Code authentifié par IDCONGO</Text>
+        </View>
+
+        {/* 4. LISTE DES PROCHES */}
+        <Text style={styles.titreSection}>👨‍👩‍👧 Famille & Proches</Text>
+        {prochesList.length > 0 ? (
+          prochesList.map((procheItem, index) => {
+            const nomProche = procheItem.nom_complet || `${procheItem.nom || ''} ${procheItem.prenom || ''}`.trim() || 'Sans Nom';
+            const c1 = procheItem.contact || procheItem.telephone || 'N/A';
+            const c2 = procheItem.contact_2 || procheItem.telephone_2 || null;
+            const adr = procheItem.adresse || 'N/A';
+
+            return (
+              <View key={index} style={styles.procheCard}>
+                <Text style={styles.procheNom}>👤 {nomProche}</Text>
+                <Text style={styles.procheInfo}>📞 Contact 1 : {c1}</Text>
+                {c2 ? <Text style={styles.procheInfo}>📱 Contact 2 : {c2}</Text> : null}
+                <Text style={styles.procheInfo}>🏠 Adresse : {adr}</Text>
+              </View>
+            );
+          })
+        ) : (
+          <View style={styles.procheCard}>
+            <Text style={styles.infoVide}>Aucun proche enregistré pour cette personne.</Text>
+          </View>
+        )}
+
+        {/* 5. BOUTON DE PARTAGE */}
+        <View style={styles.blocActions}>
+          <TouchableOpacity style={styles.btnActionLarge} onPress={partagerInfos}>
+            <Text style={styles.btnActionTexte}>🔗 Partager les informations</Text>
+          </TouchableOpacity>
+        </View>
+
+      </ScrollView>
+    </SafeAreaView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0055A5' },
+  
+  headerEspace: { 
+    height: Platform.OS === 'android' ? 65 : 55, 
+    paddingTop: Platform.OS === 'android' ? StatusBar.currentHeight || 10 : 0,
+    backgroundColor: '#0055A5', 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    justifyContent: 'space-between', 
+    paddingHorizontal: 15, 
+    borderBottomWidth: 3, 
+    borderColor: '#FFD100' 
+  },
+  btnRetour: { paddingVertical: 5, paddingHorizontal: 8 },
+  texteBtnRetour: { color: '#FFD100', fontSize: 14, fontWeight: 'bold' },
+  headerAppTitle: { color: '#FFD100', fontSize: 16, fontWeight: 'bold', letterSpacing: 1.2 },
+
+  contenuScroll: { padding: 15, paddingBottom: 40 },
+
+  sectionCentre: { alignItems: 'center', marginBottom: 20 },
+  avatarImage: { width: 110, height: 110, borderRadius: 55, borderWidth: 3, borderColor: '#FFD100' },
+  avatarCercle: { width: 110, height: 110, borderRadius: 55, backgroundColor: '#002B55', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: '#FFD100' },
+  avatarTexte: { color: '#FFF', fontSize: 11, fontWeight: 'bold' },
+  nomUtilisateur: { color: '#FFF', fontSize: 20, fontWeight: 'bold', marginTop: 10, textAlign: 'center' },
+  badgeUsername: { color: '#FFD100', fontSize: 14, fontWeight: '600', marginTop: 2 },
+
+  titreSection: { color: '#FFD100', fontSize: 16, fontWeight: 'bold', marginTop: 18, marginBottom: 8 },
+
+  // BLOC DÉTAILS
+  blocDetails: { backgroundColor: '#FFF', borderRadius: 8, padding: 12 },
+  champRow: { marginBottom: 8, borderBottomWidth: 1, borderBottomColor: '#EEE', paddingBottom: 6 },
+  champRowDernier: { marginBottom: 0 },
+  detailLabel: { fontSize: 11, color: '#666', fontWeight: 'bold' },
+  detailValeur: { fontSize: 13, color: '#000', fontWeight: 'bold', marginTop: 2 },
+
+  // BLOC QR CODE
+  blocQr: { backgroundColor: '#FFF', borderRadius: 8, padding: 15, alignItems: 'center' },
+  legendeQr: { color: '#0055A5', fontSize: 11, fontWeight: 'bold', marginTop: 8 },
+
+  // PROCHES
+  procheCard: { backgroundColor: '#003366', padding: 12, borderRadius: 8, marginBottom: 8 },
+  procheNom: { color: '#FFD100', fontSize: 14, fontWeight: 'bold', marginBottom: 4 },
+  procheInfo: { color: '#FFF', fontSize: 12, marginTop: 2 },
+  infoVide: { color: '#DDD', fontStyle: 'italic', fontSize: 12, textAlign: 'center' },
+
+  // ACTIONS
+  blocActions: { marginTop: 20 },
+  btnActionLarge: { backgroundColor: '#FFD100', paddingVertical: 12, borderRadius: 8, alignItems: 'center', marginBottom: 10 },
+  btnActionTexte: { color: '#0055A5', fontSize: 14, fontWeight: 'bold' }
+});

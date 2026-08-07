@@ -1,0 +1,2 @@
+npx localtunnel --port 80
+npm install -g localtunnel
