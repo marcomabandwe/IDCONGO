@@ -1,12 +1,8 @@
 FROM php:8.2-apache
 
-# Installer l'extension pdo_mysql / mysqli pour se connecter à MySQL
 RUN docker-php-ext-install pdo pdo_mysql mysqli
-
-# Activer mod_rewrite d'Apache (au cas où tu utilises .htaccess)
 RUN a2enmod rewrite
 
-# Copier tous tes fichiers PHP dans le dossier web d'Apache
 COPY . /var/www/html/
 
 EXPOSE 80
