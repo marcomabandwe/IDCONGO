@@ -17,7 +17,7 @@ header('Content-Type: application/json; charset=utf-8');
 // Récupération des identifiants via les variables d'environnement (Render)
 $host    = getenv('DB_HOST') ?: "mysql-9260506-mabandwemarco-edad.d.aivencloud.com";
 $port    = getenv('DB_PORT') ?: "22154";
-$db      = getenv('DB_NAME') ?: "defaultdb";
+$db      = getenv('DB_NAME') ?: "idcongo";
 $user    = getenv('DB_USER') ?: "avnadmin";
 $pass    = getenv('DB_PASS') ?: ""; 
 $charset = "utf8mb4";
