@@ -1,58 +1,67 @@
 <?php
-ini_set('display_errors', 0);
-error_reporting(0);
-
-header("Content-Type: application/json; charset=UTF-8");
-header("Access-Control-Allow-Origin: *");
-header("Access-Control-Allow-Headers: Content-Type");
-header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
-
+// On inclut config.php (qui gère déjà CORS, l'encodage JSON et la connexion $pdo)
 require_once 'config.php';
 
+// Récupération de l'identifiant (GET, POST JSON, ou Form Data)
 $username = isset($_GET['username']) ? trim($_GET['username']) : null;
 
 if (!$username) {
-    $data = json_decode(file_get_contents("php://input"), true);
-    $username = isset($data['username']) ? trim($data['username']) : null;
+    $rawInput = file_get_contents("php://input");
+    $data = json_decode($rawInput, true);
+    if (isset($data['username'])) {
+        $username = trim($data['username']);
+    } elseif (isset($data['email'])) {
+        $username = trim($data['email']);
+    } elseif (isset($data['id'])) {
+        $username = trim($data['id']);
+    }
 }
 
 if (empty($username)) {
-    echo json_encode(["status" => "error", "message" => "Nom d'utilisateur manquant."]);
+    http_response_code(400);
+    echo json_encode(["status" => "error", "message" => "Nom d'utilisateur ou ID manquant."]);
     exit;
 }
 
 try {
-    // 1. Récupération du propriétaire
-    $stmt = $pdo->prepare("SELECT * FROM proprietaires WHERE username = :user OR email = :email LIMIT 1");
+    // 1. Récupération du propriétaire (recherche par username, email ou ID)
+    $stmt = $pdo->prepare("SELECT * FROM proprietaires WHERE username = :user OR email = :email OR id = :id_alt LIMIT 1");
     $stmt->execute([
-        ':user'  => $username,
-        ':email' => $username
+        ':user'   => $username,
+        ':email'  => $username,
+        ':id_alt' => $username
     ]);
     
-    $user = $stmt->fetch(PDO::FETCH_ASSOC);
+    $user = $stmt->fetch();
 
     if ($user) {
+        // Masquer le mot de passe pour la sécurité
         unset($user['mot_de_passe']);
+        unset($user['password']);
 
-        // 2. Récupération de TOUS les proches liés à ce propriétaire (fetchAll)
+        // Détection automatique de l'ID du propriétaire (gère "id" ou "id_proprietaire")
+        $ownerId = $user['id'] ?? $user['id_proprietaire'] ?? null;
+
+        // 2. Récupération de tous les proches liés à ce propriétaire
         $proches = [];
-        if (isset($user['id'])) {
+        if ($ownerId !== null) {
             $stmtProche = $pdo->prepare("SELECT * FROM proches_identite WHERE id_proprietaire = :id ORDER BY id DESC");
-            $stmtProche->execute([':id' => $user['id']]);
-            $proches = $stmtProche->fetchAll(PDO::FETCH_ASSOC); // Récupère la liste
+            $stmtProche->execute([':id' => $ownerId]);
+            $proches = $stmtProche->fetchAll();
         }
 
         echo json_encode([
-            "status" => "success",
-            "user"   => $user,
-            "proches" => $proches // Renvoie un tableau avec tous ses proches
+            "status"  => "success",
+            "user"    => $user,
+            "proches" => $proches
         ]);
     } else {
         echo json_encode(["status" => "error", "message" => "Utilisateur non trouvé dans la BDD."]);
     }
 
 } catch (PDOException $e) {
-    echo json_encode(["status" => "error", "message" => "Erreur de base de données : " . $e->getMessage()]);
+    http_response_code(500);
+    echo json_encode(["status" => "error", "message" => "Erreur BDD : " . $e->getMessage()]);
 }
 exit;
 ?>
