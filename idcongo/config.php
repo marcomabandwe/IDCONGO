@@ -15,12 +15,11 @@ ini_set('display_errors', 0);
 header('Content-Type: application/json; charset=utf-8');
 
 // Récupération des identifiants via les variables d'environnement (Render)
-// Si la variable n'existe pas, on utilise les valeurs par défaut
 $host    = getenv('DB_HOST') ?: "mysql-9260506-mabandwemarco-edad.d.aivencloud.com";
 $port    = getenv('DB_PORT') ?: "22154";
 $db      = getenv('DB_NAME') ?: "idcongo";
 $user    = getenv('DB_USER') ?: "avnadmin";
-$pass    = getenv('DB_PASS') ?: ""; // Laisse vide ici dans le code !
+$pass    = getenv('DB_PASS') ?: ""; 
 $charset = "utf8mb4";
 
 $dsn = "mysql:host=$host;port=$port;dbname=$db;charset=$charset";
@@ -28,7 +27,9 @@ $options = [
     PDO::ATTR_ERRMODE            => PDO::ERRMODE_EXCEPTION,
     PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
     PDO::ATTR_EMULATE_PREPARES   => false,
-    PDO::MYSQL_ATTR_SSL_CA       => true,
+    // Configuration SSL pour Aiven Cloud
+    PDO::MYSQL_ATTR_SSL_CA                  => true,
+    PDO::MYSQL_ATTR_SSL_VERIFY_SERVER_CERT  => false,
 ];
 
 try {
