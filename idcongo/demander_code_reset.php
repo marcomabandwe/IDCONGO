@@ -15,17 +15,13 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once 'config.php';
 
-// --- Utiliser le port 465 avec SMTPSecure = SSL ---
-    $mail->isSMTP();
-    $mail->Host       = getenv('SMTP_HOST') ?: 'smtp.gmail.com';
-    $mail->SMTPAuth   = true;
-    $mail->Username   = getenv('SMTP_USER') ?: 'mabandwemarco@gmail.com'; 
-    $mail->Password   = getenv('SMTP_PASS') ?: 'uque ssld gnxs phly'; 
+// 1. Inclusion manuelle des fichiers PHPMailer depuis le dossier idcongo/PHPMailer
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
 
-    // 🟢 CHANGEMENT ICI : Passer de STARTTLS à SMTPS (SSL)
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; // ou simplement 'ssl'
-    $mail->Port       = 465; // On force le port 465
-    $mail->CharSet    = 'UTF-8';
+require_once __DIR__ . '/PHPMailer/src/Exception.php';
+require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
+require_once __DIR__ . '/PHPMailer/src/SMTP.php';
 
 $data = json_decode(file_get_contents('php://input'), true);
 $identifiant = isset($data['identifiant']) ? trim($data['identifiant']) : '';
@@ -36,7 +32,7 @@ if (empty($identifiant)) {
 }
 
 try {
-    // 1. Recherche du vrai propriétaire dans la BDD
+    // 2. Recherche du vrai propriétaire dans la BDD
     $stmt = $pdo->prepare('SELECT id, email, nom, prenom FROM proprietaires WHERE username = :id1 OR email = :id2 LIMIT 1');
     $stmt->execute(['id1' => $identifiant, 'id2' => $identifiant]);
     $user = $stmt->fetch();
@@ -49,10 +45,10 @@ try {
     $emailDestinataire = $user['email'];
     $nomComplet = trim(($user['prenom'] ?? '') . ' ' . ($user['nom'] ?? ''));
 
-    // 2. Génération du code à 6 chiffres
+    // 3. Génération du code à 6 chiffres
     $code = str_pad(rand(0, 999999), 6, '0', STR_PAD_LEFT);
 
-    // 3. Sauvegarde dans codes_reset
+    // 4. Sauvegarde / mise à jour dans la table codes_reset
     $stmtCode = $pdo->prepare('
         INSERT INTO codes_reset (email, code, date_creation) 
         VALUES (:email, :code, NOW()) 
@@ -65,19 +61,22 @@ try {
         'code_update' => $code
     ]);
 
-    // 4. Configuration et envoi du mail via SMTP
+    // 5. Instanciation et configuration de PHPMailer (Port 465 SSL)
     $mail = new PHPMailer(true);
+
+    $smtpUser = getenv('SMTP_USER') ?: 'mabandwemarco@gmail.com';
+    $smtpPass = getenv('SMTP_PASS') ?: ''; // Note: Pense à retirer le mot de passe en clair si tu l'as mis en Variable d'environnement Render !
 
     $mail->isSMTP();
     $mail->Host       = getenv('SMTP_HOST') ?: 'smtp.gmail.com';
     $mail->SMTPAuth   = true;
-    $mail->Username   = getenv('SMTP_USER') ?: 'mabandwemarco@gmail.com'; // Ton adresse Gmail
-    $mail->Password   = getenv('SMTP_PASS') ?: 'uque ssld gnxs phly'; // Ton Mot de passe d'application
-    $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
-    $mail->Port       = getenv('SMTP_PORT') ?: 587;
+    $mail->Username   = $smtpUser;
+    $mail->Password   = $smtpPass;
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; // SSL (Fortement recommandé sur Render)
+    $mail->Port       = 465;
     $mail->CharSet    = 'UTF-8';
 
-    $mail->setFrom(getenv('SMTP_USER') ?: 'no-reply@idcongo.com', 'IDCONGO Sécurité');
+    $mail->setFrom($smtpUser, 'IDCONGO Sécurité');
     $mail->addAddress($emailDestinataire, $nomComplet);
 
     $mail->isHTML(true);
@@ -97,7 +96,7 @@ try {
 
     echo json_encode([
         'status'  => 'success', 
-        'message' => 'Un code de confirmation a été envoyé à votre e-mail.'
+        'message' => 'Un code de confirmation a été envoyé à l\'adresse e-mail associée.'
     ]);
 
 } catch (Exception $e) {
