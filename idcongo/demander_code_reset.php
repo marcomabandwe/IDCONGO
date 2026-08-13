@@ -15,13 +15,17 @@ header('Content-Type: application/json; charset=utf-8');
 
 require_once 'config.php';
 
-// 🟢 FIX : Chargement manuel des fichiers PHPMailer depuis le dossier local
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+// --- Utiliser le port 465 avec SMTPSecure = SSL ---
+    $mail->isSMTP();
+    $mail->Host       = getenv('SMTP_HOST') ?: 'smtp.gmail.com';
+    $mail->SMTPAuth   = true;
+    $mail->Username   = getenv('SMTP_USER') ?: 'mabandwemarco@gmail.com'; 
+    $mail->Password   = getenv('SMTP_PASS') ?: 'uque ssld gnxs phly'; 
 
-require_once __DIR__ . '/PHPMailer/src/Exception.php';
-require_once __DIR__ . '/PHPMailer/src/PHPMailer.php';
-require_once __DIR__ . '/PHPMailer/src/SMTP.php';
+    // 🟢 CHANGEMENT ICI : Passer de STARTTLS à SMTPS (SSL)
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; // ou simplement 'ssl'
+    $mail->Port       = 465; // On force le port 465
+    $mail->CharSet    = 'UTF-8';
 
 $data = json_decode(file_get_contents('php://input'), true);
 $identifiant = isset($data['identifiant']) ? trim($data['identifiant']) : '';
