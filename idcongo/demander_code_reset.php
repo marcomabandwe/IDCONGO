@@ -71,8 +71,8 @@ try {
     $mail->isSMTP();
     $mail->Host       = getenv('SMTP_HOST') ?: 'smtp.gmail.com';
     $mail->SMTPAuth   = true;
-    $mail->Username   = getenv('SMTP_USER') ?: 'votre.email@gmail.com'; // Ton adresse Gmail
-    $mail->Password   = getenv('SMTP_PASS') ?: 'votre_mot_de_passe_app'; // Ton Mot de passe d'application
+    $mail->Username   = getenv('SMTP_USER') ?: 'mabandwemarco@gmail.com'; // Ton adresse Gmail
+    $mail->Password   = getenv('SMTP_PASS') ?: 'uque ssld gnxs phly'; // Ton Mot de passe d'application
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_STARTTLS;
     $mail->Port       = getenv('SMTP_PORT') ?: 587;
     $mail->CharSet    = 'UTF-8';
