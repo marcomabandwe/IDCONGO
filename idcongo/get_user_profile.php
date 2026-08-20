@@ -39,6 +39,30 @@ try {
         unset($user['mot_de_passe']);
         unset($user['password']);
 
+        // --- GESTION DU CHEMIN DE LA PHOTO DE PROFIL ---
+        $photoField = $user['photo_url'] ?? $user['photo'] ?? $user['avatar'] ?? null;
+
+        if (!empty($photoField)) {
+            // Nettoyage des slashes au début
+            $cleanPath = ltrim($photoField, '/');
+
+            // Si la photo n'est ni un Data Base64 ni une URL absolue (http/https)
+            if (!preg_match('/^data:image/', $cleanPath) && !preg_match('/^https?:\/\//i', $cleanPath)) {
+                // S'assure que le chemin commence bien par uploads/
+                if (strpos($cleanPath, 'uploads/') !== 0 && strpos($cleanPath, 'uploads\\') !== 0) {
+                    $cleanPath = 'uploads/' . $cleanPath;
+                }
+            }
+
+            // Mise à jour des clés de photo pour garantir une réponse uniforme
+            $user['photo_url'] = $cleanPath;
+            $user['photo']     = $cleanPath;
+        } else {
+            $user['photo_url'] = null;
+            $user['photo']     = null;
+        }
+        // -----------------------------------------------
+
         // Détection automatique de l'ID du propriétaire (gère "id" ou "id_proprietaire")
         $ownerId = $user['id'] ?? $user['id_proprietaire'] ?? null;
 
@@ -48,6 +72,21 @@ try {
             $stmtProche = $pdo->prepare("SELECT * FROM proches_identite WHERE id_proprietaire = :id ORDER BY id DESC");
             $stmtProche->execute([':id' => $ownerId]);
             $proches = $stmtProche->fetchAll();
+
+            // Normalisation des chemins de photo pour les proches si présents
+            foreach ($proches as &$proche) {
+                $prochePhoto = $proche['photo_url'] ?? $proche['photo'] ?? null;
+                if (!empty($prochePhoto)) {
+                    $pClean = ltrim($prochePhoto, '/');
+                    if (!preg_match('/^data:image/', $pClean) && !preg_match('/^https?:\/\//i', $pClean)) {
+                        if (strpos($pClean, 'uploads/') !== 0) {
+                            $pClean = 'uploads/' . $pClean;
+                        }
+                    }
+                    $proche['photo_url'] = $pClean;
+                    $proche['photo']     = $pClean;
+                }
+            }
         }
 
         echo json_encode([
