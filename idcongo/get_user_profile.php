@@ -39,31 +39,36 @@ try {
         unset($user['mot_de_passe']);
         unset($user['password']);
 
-        // --- GESTION DU CHEMIN DE LA PHOTO DE PROFIL ---
+        // --- GESTION DU CHEMIN DE LA PHOTO DANS idcongo/uploads ---
         $photoField = $user['photo_url'] ?? $user['photo'] ?? $user['avatar'] ?? null;
 
         if (!empty($photoField)) {
-            // Nettoyage des slashes au début
+            // Nettoyage des slashes en début de chaîne
             $cleanPath = ltrim($photoField, '/');
 
-            // Si la photo n'est ni un Data Base64 ni une URL absolue (http/https)
+            // Si ce n'est ni un Data Base64 ni une URL absolue (http/https)
             if (!preg_match('/^data:image/', $cleanPath) && !preg_match('/^https?:\/\//i', $cleanPath)) {
-                // S'assure que le chemin commence bien par uploads/
-                if (strpos($cleanPath, 'uploads/') !== 0 && strpos($cleanPath, 'uploads\\') !== 0) {
-                    $cleanPath = 'uploads/' . $cleanPath;
+                
+                // Si le chemin commence par uploads/ sans idcongo/ devant, on ajoute idcongo/
+                if (strpos($cleanPath, 'uploads/') === 0) {
+                    $cleanPath = 'idcongo/' . $cleanPath;
+                } 
+                // Si le chemin ne contient ni idcongo/ ni uploads/, on ajoute idcongo/uploads/
+                elseif (strpos($cleanPath, 'idcongo/uploads/') !== 0) {
+                    $cleanPath = 'idcongo/uploads/' . $cleanPath;
                 }
             }
 
-            // Mise à jour des clés de photo pour garantir une réponse uniforme
+            // Uniformisation des clés
             $user['photo_url'] = $cleanPath;
             $user['photo']     = $cleanPath;
         } else {
             $user['photo_url'] = null;
             $user['photo']     = null;
         }
-        // -----------------------------------------------
+        // -----------------------------------------------------------
 
-        // Détection automatique de l'ID du propriétaire (gère "id" ou "id_proprietaire")
+        // Détection automatique de l'ID du propriétaire
         $ownerId = $user['id'] ?? $user['id_proprietaire'] ?? null;
 
         // 2. Récupération de tous les proches liés à ce propriétaire
@@ -73,14 +78,16 @@ try {
             $stmtProche->execute([':id' => $ownerId]);
             $proches = $stmtProche->fetchAll();
 
-            // Normalisation des chemins de photo pour les proches si présents
+            // Ajustement des images des proches
             foreach ($proches as &$proche) {
                 $prochePhoto = $proche['photo_url'] ?? $proche['photo'] ?? null;
                 if (!empty($prochePhoto)) {
                     $pClean = ltrim($prochePhoto, '/');
                     if (!preg_match('/^data:image/', $pClean) && !preg_match('/^https?:\/\//i', $pClean)) {
-                        if (strpos($pClean, 'uploads/') !== 0) {
-                            $pClean = 'uploads/' . $pClean;
+                        if (strpos($pClean, 'uploads/') === 0) {
+                            $pClean = 'idcongo/' . $pClean;
+                        } elseif (strpos($pClean, 'idcongo/uploads/') !== 0) {
+                            $pClean = 'idcongo/uploads/' . $pClean;
                         }
                     }
                     $proche['photo_url'] = $pClean;
