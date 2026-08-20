@@ -39,7 +39,7 @@ $telephone_2 = $data['telephone_2'] ?? '';
 $photo_base64 = $data['photo_base64'] ?? null;
 
 try {
-    // Traitement de la photo si une nouvelle photo en base64 est envoyée
+    // Traitement de la photo
     $photo_url_query = "";
     $params = [
         ':nom' => $nom,
@@ -63,8 +63,8 @@ try {
     ];
 
     if ($photo_base64) {
-        // Option A: Sauvegarde dans un dossier physique sur le serveur
-        $dir = "uploads/";
+        // Enregistrement dans le dossier idcongo/uploads/
+        $dir = "idcongo/uploads/";
         if (!file_exists($dir)) {
             mkdir($dir, 0777, true);
         }
